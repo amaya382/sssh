@@ -1,6 +1,10 @@
 #!/bin/bash
 
 sssh() {
+  # opts
+  use_remote_uid=1
+  use_allow_other=1
+
   local_dir=''
   remote_dir=''
   while [[ -n "$1" ]]; do
@@ -36,7 +40,6 @@ sssh() {
     fi
   fi
 
-  use_remote_uid=1
   if [ -v use_remote_uid ]; then
     uid=$(ssh ${SSH_REMOTE} -p ${SSH_PORT} id -u \$\(whoami\))
   fi
@@ -47,7 +50,7 @@ sssh() {
   mkfifo -m600 "${fifo}" && \
   < "${fifo}" /usr/lib/openssh/sftp-server \
   | ssh "${SSH_REMOTE}" -p "${SSH_PORT}" \
-    sshfs -C -o slave ${uid/#/-o uid=} -o cache=no -o transform_symlinks -o follow_symlinks \
+    sshfs -C -o slave $([ -v use_allow_other ] && echo "-o allow_other") ${uid/#/-o uid=} -o cache=no -o transform_symlinks -o follow_symlinks \
         ":${local_dir}" "${remote_dir}" \
   > "${fifo}" &
   sshfs_proc="$!"
