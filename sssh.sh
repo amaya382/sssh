@@ -54,6 +54,6 @@ sssh() {
         ":${local_dir}" "${remote_dir}" \
   > "${fifo}" &
   sshfs_proc="$!"
-  trap "{ kill ${sshfs_proc} && wait ${sshfs_proc} } 2> /dev/null" 0 1 2 3 15
+  trap "{ kill ${sshfs_proc} && wait ${sshfs_proc}; ssh ${SSH_REMOTE} -p ${SSH_PORT} fusermount -u ${remote_dir} } 2> /dev/null" 0 1 2 3 15
   ssh "${SSH_REMOTE}" ${SSH_OPTS}
 }
