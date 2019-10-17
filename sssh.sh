@@ -26,24 +26,26 @@ sssh() {
 
   : "${SSH_PORT=22}"
 
-  if [ "$local_dir" != "" ]; then
-    # if not exist local_dir, create it
-    if [ ! -e "${local_dir}" ]; then
-      mkdir -p "${local_dir}"
-    fi
-
-    # check remote_dir
-    # if not exist, transfer local_dir
-    if [ "$(ssh ${SSH_REMOTE} [ -e ${remote_dir} ] && echo o || echo x)" = "x" ]; then
-      scp -q -P "${SSH_PORT}" -r "${local_dir}" "${SSH_REMOTE}:${remote_dir}"
-    else
-      echo "${SSH_REMOTE}:${remote_dir} already exists."
+  if [ "$(ssh ${SSH_REMOTE} -p ${SSH_PORT} [ -e ${remote_dir} ] && echo o || echo x)" = "x" ]; then
+    ssh ${SSH_REMOTE} -p ${SSH_PORT} mkdir -p "${remote_dir}"
+    echo "Created ${remote_dir} on ${SSH_REMOTE}"
+  else
+    if [ -n "$(ssh ${SSH_REMOTE} -p ${SSH_PORT} ls ${remote_dir})" ]; then
+      echo "${SSH_REMOTE}:${remote_dir} already exists and is not empty."
       return
     fi
-
-    trap "fusermount -u ${local_dir}.mount" 0 1 2 3 15
-    mkdir -p "${local_dir}.mount"
-    sshfs -p "${SSH_PORT}" "${SSH_REMOTE}:${remote_dir}" "${local_dir}.mount"
-    ssh "${SSH_REMOTE}" ${SSH_OPTS}
   fi
+
+  tmp_dir=$(mktemp -d)
+  trap "rm -rf ${tmp_dir}" 0 1 2 3 15
+  fifo=${tmp_dir}/fifo
+  mkfifo -m600 "${fifo}" && \
+  < "${fifo}" /usr/lib/openssh/sftp-server \
+  | ssh "${SSH_REMOTE}" -p "${SSH_PORT}" \
+      sshfs -C -o slave -o cache=no -o transform_symlinks -o follow_symlinks \
+        ":${local_dir}" "${remote_dir}" \
+  > "${fifo}" &
+  sshfs_proc="$!"
+  trap "{ kill ${sshfs_proc} && wait ${sshfs_proc} } 2> /dev/null" 0 1 2 3 15
+  ssh "${SSH_REMOTE}" ${SSH_OPTS}
 }
