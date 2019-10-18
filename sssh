@@ -1,0 +1,78 @@
+#!/bin/bash
+
+# opts
+ssh_cmd=ssh
+sftp_cmd=/usr/lib/openssh/sftp-server
+sshfs_cmd=sshfs
+use_remote_uid=true
+use_allow_other=true
+ssh_port=22
+local_dir=''
+remote_dir=''
+while [[ -n "$1" ]]; do
+  case "$1" in
+    --ssh_cmd )
+      ssh_cmd="$2"
+      shift ;;
+    --sftp_cmd )
+      sftp_cmd="$2"
+      shift ;;
+    --sshfs_cmd )
+      sshfs_cmd="$2"
+      shift ;;
+    --use_remote_uid )
+      use_remote_uid="$2"
+      shift ;;
+    --use_allow_other )
+      use_allow_other="$2"
+      shift ;;
+    --volume )
+      local_dir="$(echo $2 | cut -d ':' -f 1)"
+      remote_dir="$(echo $2 | cut -d ':' -f 2)"
+      shift ;;
+    -b | -c | -D | -E | -e | -F | -I | -i | -J | -L | -l | -m | -O | -o | -p | -Q | -R | -S | -W | -w )
+      if [ "$1" = '-p' ]; then
+        ssh_port="$2"
+      fi
+      ssh_opts="${ssh_opts} $1 $2"; shift ;;
+    -* )
+      ssh_opts="${ssh_opts} $1" ;;
+    * )
+      if [ -z "${ssh_remote:+_}" ]; then
+        ssh_remote="$1"
+      fi; ;;
+  esac
+  shift
+done
+
+tmp_dir="$(mktemp -d)"
+trap "rm -rf ${tmp_dir}" 0 1 2 3 15
+
+# --volume
+if [ "${local_dir}" != '' -a "${remote_dir}" != '' ]; then
+  if [ "$(${ssh_cmd} ${ssh_remote} -p ${ssh_port} [ -e ${remote_dir} ] && echo o || echo x)" = "x" ]; then
+    ${ssh_cmd} ${ssh_remote} -p ${ssh_port} mkdir -p "${remote_dir}"
+    echo "Created ${remote_dir} on ${ssh_remote}"
+  else
+    if [ -n "$(${ssh_cmd} ${ssh_remote} -p ${ssh_port} ls ${remote_dir})" ]; then
+      echo "${ssh_remote}:${remote_dir} already exists and is not empty."
+      exit 1
+    fi
+  fi
+
+  if "${use_remote_uid}" ; then
+    uid="$(${ssh_cmd} ${ssh_remote} -p ${ssh_port} id -u \$\(whoami\))"
+  fi
+
+  sshfs_fifo="${tmp_dir}/sshfs_fifo"
+  mkfifo -m 600 "${sshfs_fifo}"
+  "${sftp_cmd}" < "${sshfs_fifo}" \
+  | "${ssh_cmd}" "${ssh_remote}" -p "${ssh_port}" \
+    "${sshfs_cmd}" -C -o slave $("${use_allow_other}" && echo "-o allow_other") ${uid/#/-o uid=} -o cache=no -o transform_symlinks -o follow_symlinks \
+      ":${local_dir}" "${remote_dir}" \
+  > "${sshfs_fifo}" &
+  sshfs_proc="$!"
+  trap "kill ${sshfs_proc} && wait ${sshfs_proc} && ${ssh_cmd} ${ssh_remote} -p ${ssh_port} fusermount -u ${remote_dir} > /dev/null 2>&1" 0 1 2 3 15
+fi
+
+"${ssh_cmd}" "${ssh_remote}" ${ssh_opts}
