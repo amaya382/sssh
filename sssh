@@ -45,8 +45,27 @@ while [[ -n "$1" ]]; do
   shift
 done
 
+
+# trap
+trap_handlers=()
+add_trap() {
+  trap_handlers+=("$1")
+}
+_trap() {
+  for handler in "${trap_handlers[@]}"; do
+    $handler
+  done
+}
+trap "_trap" 0 1 2 3 15
+
+
+# tmp dirs
 tmp_dir="$(mktemp -d)"
-trap "rm -rf ${tmp_dir}" 0 1 2 3 15
+add_trap "rm -rf ${tmp_dir}"
+
+remote_tmp_dir="$(${ssh_cmd} ${ssh_remote} -p ${ssh_port} mktemp -d)"
+add_trap "${ssh_cmd} ${ssh_remote} -p ${ssh_port} rm -rf ${remote_tmp_dir}"
+
 
 # --volume
 if [ "${local_dir}" != '' -a "${remote_dir}" != '' ]; then
@@ -72,7 +91,39 @@ if [ "${local_dir}" != '' -a "${remote_dir}" != '' ]; then
       ":${local_dir}" "${remote_dir}" \
   > "${sshfs_fifo}" &
   sshfs_proc="$!"
-  trap "kill ${sshfs_proc} && wait ${sshfs_proc} && ${ssh_cmd} ${ssh_remote} -p ${ssh_port} fusermount -u ${remote_dir} > /dev/null 2>&1" 0 1 2 3 15
+  add_trap "kill ${sshfs_proc} && wait ${sshfs_proc} && ${ssh_cmd} ${ssh_remote} -p ${ssh_port} fusermount -u ${remote_dir} > /dev/null 2>&1"
 fi
 
+
+# clipboard
+if which xsel &> /dev/null; then
+  copy_cmd='xsel -bi'
+elif which xclip &> /dev/null; then
+  copy_cmd='xclip -selection clipboard'
+elif which pbcopy &> /dev/null; then
+  copy_cmd='pbcopy'
+else
+  copy_cmd=''
+fi
+
+case "${OSYTPE}" in
+  darwin* )
+    base64_d_cmd='base64 -D' ;;
+  * )
+    base64_d_cmd='base64 -d' ;;
+esac
+
+if [ "${copy_cmd}" != '' ]; then
+  clipboard_fifo="${remote_tmp_dir}/clipboard_fifo"
+  clipboard_pid_file="${tmp_dir}/clipboard_pid"
+  sh -c "{ ${ssh_cmd} ${ssh_remote} -p ${ssh_port} \
+    \"mkfifo -m 600 ${clipboard_fifo} && tail -f ${clipboard_fifo}\" \
+    | while read chunk; do echo \${chunk} | ${base64_d_cmd} | ${copy_cmd}; done & } ; jobs -p" > ${clipboard_pid_file}
+  clipboard_pid="$(cat ${clipboard_pid_file})"
+  add_trap "kill ${clipboard_pid}"
+fi
+
+
+# ssh
 "${ssh_cmd}" "${ssh_remote}" ${ssh_opts}
+
