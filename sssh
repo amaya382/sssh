@@ -28,6 +28,12 @@ while [[ -n "$1" ]]; do
     --use_allow_other )
       use_allow_other="$2"
       shift ;;
+    --remote_copy_cmd_name )
+      remote_copy_cmd_name="$2"
+      shift ;;
+    --remote_paste_cmd_name )
+      remote_paste_cmd_name="$2"
+      shift ;;
     --volume )
       local_dir="$(echo $2 | cut -d ':' -f 1)"
       remote_dir="$(echo $2 | cut -d ':' -f 2)"
