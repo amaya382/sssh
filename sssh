@@ -9,6 +9,8 @@ use_allow_other=true
 ssh_port=22
 local_dir=''
 remote_dir=''
+remote_copy_cmd_name=rcopy
+remote_paste_cmd_name=rpaste
 while [[ -n "$1" ]]; do
   case "$1" in
     --ssh_cmd )
@@ -35,6 +37,8 @@ while [[ -n "$1" ]]; do
         ssh_port="$2"
       fi
       ssh_opts="${ssh_opts} $1 $2"; shift ;;
+    -t )
+      shift ;; # Ignore -t since use it automatically if need be
     -* )
       ssh_opts="${ssh_opts} $1" ;;
     * )
@@ -106,14 +110,20 @@ else
   copy_cmd=''
 fi
 
-case "${OSYTPE}" in
-  darwin* )
-    base64_d_cmd='base64 -D' ;;
-  * )
-    base64_d_cmd='base64 -d' ;;
-esac
+if which base64 &> /dev/null; then
+  case "${OSYTPE}" in
+    darwin* )
+      base64_d_cmd='base64 -D' ;;
+    * )
+      base64_d_cmd='base64 -d' ;;
+  esac
+elif which openssl &> /dev/null; then
+  base64_d_cmd='openssl enc -base64'
+else
+  echo "[Warn] sssh requires base64 or openssl for clipboard support"
+fi
 
-if [ "${copy_cmd}" != '' ]; then
+if [ "${copy_cmd}" != '' -a "${base64_d_cmd}" != '' ]; then
   clipboard_fifo="${remote_tmp_dir}/clipboard_fifo"
   clipboard_pid_file="${tmp_dir}/clipboard_pid"
   sh -c "{ ${ssh_cmd} ${ssh_remote} -p ${ssh_port} \
@@ -121,9 +131,15 @@ if [ "${copy_cmd}" != '' ]; then
     | while read chunk; do echo \${chunk} | ${base64_d_cmd} | ${copy_cmd}; done & } ; jobs -p" > ${clipboard_pid_file}
   clipboard_pid="$(cat ${clipboard_pid_file})"
   add_trap "kill ${clipboard_pid}"
+
+  # ssh w/ clipboard support
+  remote_copy_cmd="${remote_tmp_dir}/${remote_copy_cmd_name}"
+  "${ssh_cmd}" "${ssh_remote}" -t ${ssh_opts} " \
+    export PATH=\${PATH}:${remote_tmp_dir} && \
+    echo \"cat - | base64 > ${clipboard_fifo}\" > ${remote_copy_cmd} && \
+    chmod +x ${remote_copy_cmd} && \
+    \$(cat /etc/passwd | grep \$(whoami) | grep -oP '[^:]+$')"
+else
+  # ssh w/o clipboard support
+  "${ssh_cmd}" "${ssh_remote}" ${ssh_opts}
 fi
-
-
-# ssh
-"${ssh_cmd}" "${ssh_remote}" ${ssh_opts}
-
