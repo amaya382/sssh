@@ -13,6 +13,7 @@ enable_eval_and_clipboard=true
 r_copy_cmd_name=rcopy
 r_paste_cmd_name=rpaste
 r_eval_cmd_name=reval
+cmds_work_w_tty=()
 while [[ -n "$1" ]]; do
   case "$1" in
     --ssh_cmd )
@@ -52,12 +53,19 @@ while [[ -n "$1" ]]; do
       fi
       ssh_opts="${ssh_opts} $1 $2"; shift ;;
     -t )
-      ;; # Ignore -t since use it automatically if need be
+      # expect commands which work w/ tty are passed
+      # e.g,
+      # sssh -t user@host zsh
+      #      ^^   expects ^^^
+      tty=true
+      ;;
     -* )
       ssh_opts="${ssh_opts} $1" ;;
     * )
       if [ -z "${ssh_remote:+_}" ]; then
         ssh_remote="$1"
+      else
+        cmds_work_w_tty+=("$1")
       fi; ;;
   esac
   shift
@@ -171,7 +179,7 @@ if ${enable_eval_and_clipboard} && \
   r_eval_cmd="${r_tmp_dir}/${r_eval_cmd_name}"
   r_copy_cmd="${r_tmp_dir}/${r_copy_cmd_name}"
   r_paste_cmd="${r_tmp_dir}/${r_paste_cmd_name}"
-  "${ssh_cmd}" "${ssh_remote}" -t ${ssh_opts} " \
+  pre_cmd="\
 export PATH=\${PATH}:${r_tmp_dir}
 
 cat << EOS > ${r_eval_cmd}
@@ -193,10 +201,20 @@ cat << EOS > ${r_paste_cmd}
 echo '${l_paste_cmd}' | ${r_eval_cmd}
 EOS
 
-chmod +x ${r_eval_cmd} ${r_copy_cmd} ${r_paste_cmd}
-\$(cat /etc/passwd | grep \$(whoami) | grep -oP '[^:]+$')"
+chmod +x ${r_eval_cmd} ${r_copy_cmd} ${r_paste_cmd}"
+
+  if "${tty}"; then
+    tty_cmd="${cmds_work_w_tty[@]}"
+  else
+    tty_cmd="\$\(cat /etc/passwd \| grep \$\(whoami\) \| grep -oP \"[^:]+$\"\))"
+  fi
+  "${ssh_cmd}" "${ssh_remote}" -t ${ssh_opts} "${pre_cmd}${tty_cmd}"
 else
   # ssh w/o reverse eval and remote clipboard support
   echo "[Warn] sssh is running w/o reverse eval and remote clipboard support" >&2
-  "${ssh_cmd}" "${ssh_remote}" ${ssh_opts}
+  if ${tty}; then
+    "${ssh_cmd}" "${ssh_remote}" -t ${ssh_opts} "${cmds_work_w_tty[@]}"
+  else
+    "${ssh_cmd}" "${ssh_remote}" ${ssh_opts}
+  fi
 fi
