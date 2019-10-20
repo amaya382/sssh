@@ -48,10 +48,17 @@ $ sssh [<ssh_opts_if_need_be>] <remote_host>
 ##### Remote copy
 And then, in the remote shell,
 ```console
-$ echo -n 'from remote to local\n👍' | rcopy
+$ echo -ne 'from remote to local\n👍' | rcopy
 ```
 
-Now "some-text" is in your local clipboard!
+Now
+
+```
+from remote to local
+👍
+```
+
+is in your local clipboard!
 Of course, you can copy text from any tools (e.g., `tmux`, `vim`) by using `rcopy` command in your settings.
 
 ##### Remote paste
