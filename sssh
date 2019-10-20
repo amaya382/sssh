@@ -7,10 +7,12 @@ sshfs_cmd=sshfs
 use_remote_uid=true
 use_allow_other=true
 ssh_port=22
-local_dir=''
-remote_dir=''
-remote_copy_cmd_name=rcopy
-remote_paste_cmd_name=rpaste
+l_mount_dir=''
+r_mount_dir=''
+enable_eval_and_clipboard=true
+r_copy_cmd_name=rcopy
+r_paste_cmd_name=rpaste
+r_eval_cmd_name=reval
 while [[ -n "$1" ]]; do
   case "$1" in
     --ssh_cmd )
@@ -28,15 +30,21 @@ while [[ -n "$1" ]]; do
     --use_allow_other )
       use_allow_other="$2"
       shift ;;
+    --enable_eval_and_clipboard )
+      enable_eval_and_clipboard="$2"
+      shift ;;
     --remote_copy_cmd_name )
-      remote_copy_cmd_name="$2"
+      r_copy_cmd_name="$2"
       shift ;;
     --remote_paste_cmd_name )
-      remote_paste_cmd_name="$2"
+      r_paste_cmd_name="$2"
+      shift ;;
+    --reverse_eval_cmd_name )
+      r_eval_cmd_name="$2"
       shift ;;
     --volume )
-      local_dir="$(echo $2 | cut -d ':' -f 1)"
-      remote_dir="$(echo $2 | cut -d ':' -f 2)"
+      l_mount_dir="$(echo $2 | cut -d ':' -f 1)"
+      r_mount_dir="$(echo $2 | cut -d ':' -f 2)"
       shift ;;
     -b | -c | -D | -E | -e | -F | -I | -i | -J | -L | -l | -m | -O | -o | -p | -Q | -R | -S | -W | -w )
       if [ "$1" = '-p' ]; then
@@ -44,7 +52,7 @@ while [[ -n "$1" ]]; do
       fi
       ssh_opts="${ssh_opts} $1 $2"; shift ;;
     -t )
-      shift ;; # Ignore -t since use it automatically if need be
+      ;; # Ignore -t since use it automatically if need be
     -* )
       ssh_opts="${ssh_opts} $1" ;;
     * )
@@ -63,28 +71,28 @@ add_trap() {
 }
 _trap() {
   for handler in "${trap_handlers[@]}"; do
-    $handler
+    eval $handler
   done
 }
 trap "_trap" 0 1 2 3 15
 
 
 # tmp dirs
-tmp_dir="$(mktemp -d)"
-add_trap "rm -rf ${tmp_dir}"
+l_tmp_dir="$(mktemp -d)"
+add_trap "rm -rf ${l_tmp_dir}"
 
-remote_tmp_dir="$(${ssh_cmd} ${ssh_remote} -p ${ssh_port} mktemp -d)"
-add_trap "${ssh_cmd} ${ssh_remote} -p ${ssh_port} rm -rf ${remote_tmp_dir}"
+r_tmp_dir="$(${ssh_cmd} ${ssh_remote} -p ${ssh_port} mktemp -d)"
+add_trap "${ssh_cmd} ${ssh_remote} -p ${ssh_port} rm -rf ${r_tmp_dir}"
 
 
 # --volume
-if [ "${local_dir}" != '' -a "${remote_dir}" != '' ]; then
-  if [ "$(${ssh_cmd} ${ssh_remote} -p ${ssh_port} [ -e ${remote_dir} ] && echo o || echo x)" = "x" ]; then
-    ${ssh_cmd} ${ssh_remote} -p ${ssh_port} mkdir -p "${remote_dir}"
-    echo "Created ${remote_dir} on ${ssh_remote}"
+if [ "${l_mount_dir}" != '' -a "${r_mount_dir}" != '' ]; then
+  if [ "$(${ssh_cmd} ${ssh_remote} -p ${ssh_port} [ -e ${r_mount_dir} ] && echo o || echo x)" = "x" ]; then
+    ${ssh_cmd} ${ssh_remote} -p ${ssh_port} mkdir -p "${r_mount_dir}"
+    echo "Created ${r_mount_dir} on ${ssh_remote}"
   else
-    if [ -n "$(${ssh_cmd} ${ssh_remote} -p ${ssh_port} ls ${remote_dir})" ]; then
-      echo "${ssh_remote}:${remote_dir} already exists and is not empty."
+    if [ -n "$(${ssh_cmd} ${ssh_remote} -p ${ssh_port} ls ${r_mount_dir})" ]; then
+      echo "${ssh_remote}:${r_mount_dir} already exists and is not empty."
       exit 1
     fi
   fi
@@ -93,59 +101,102 @@ if [ "${local_dir}" != '' -a "${remote_dir}" != '' ]; then
     uid="$(${ssh_cmd} ${ssh_remote} -p ${ssh_port} id -u \$\(whoami\))"
   fi
 
-  sshfs_fifo="${tmp_dir}/sshfs_fifo"
-  mkfifo -m 600 "${sshfs_fifo}"
-  "${sftp_cmd}" < "${sshfs_fifo}" \
+  l_sshfs_fifo="${l_tmp_dir}/sshfs_fifo"
+  mkfifo -m 600 "${l_sshfs_fifo}"
+  "${sftp_cmd}" < "${l_sshfs_fifo}" \
   | "${ssh_cmd}" "${ssh_remote}" -p "${ssh_port}" \
     "${sshfs_cmd}" -C -o slave $("${use_allow_other}" && echo "-o allow_other") ${uid/#/-o uid=} -o cache=no -o transform_symlinks -o follow_symlinks \
-      ":${local_dir}" "${remote_dir}" \
-  > "${sshfs_fifo}" &
+      ":${l_mount_dir}" "${r_mount_dir}" \
+  > "${l_sshfs_fifo}" &
   sshfs_proc="$!"
-  add_trap "kill ${sshfs_proc} && wait ${sshfs_proc} && ${ssh_cmd} ${ssh_remote} -p ${ssh_port} fusermount -u ${remote_dir} > /dev/null 2>&1"
+  add_trap "kill ${sshfs_proc} && wait ${sshfs_proc} && ${ssh_cmd} ${ssh_remote} -p ${ssh_port} fusermount -u ${r_mount_dir} > /dev/null 2>&1"
 fi
 
 
-# clipboard
+# remote clipboard
 if which xsel &> /dev/null; then
-  copy_cmd='xsel -bi'
+  l_copy_cmd='xsel -bi'
+  l_paste_cmd='xsel -bo'
 elif which xclip &> /dev/null; then
-  copy_cmd='xclip -selection clipboard'
-elif which pbcopy &> /dev/null; then
-  copy_cmd='pbcopy'
+  l_copy_cmd='xclip -selection c'
+  l_paste_cmd='xclip -selection c -o'
+elif which pbcopy &> /dev/null && which pbpaste &> /dev/null; then
+  l_copy_cmd='pbcopy'
+  l_paste_cmd='pbpaste'
 else
-  copy_cmd=''
+  l_copy_cmd=''
+  l_paste_cmd=''
 fi
 
 if which base64 &> /dev/null; then
   case "${OSYTPE}" in
     darwin* )
-      base64_d_cmd='base64 -D' ;;
+      l_base64_d_cmd='base64 -D' ;;
     * )
-      base64_d_cmd='base64 -d' ;;
+      l_base64_d_cmd='base64 -d' ;;
   esac
 elif which openssl &> /dev/null; then
-  base64_d_cmd='openssl enc -base64'
+  l_base64_d_cmd='openssl enc -base64'
 else
-  echo "[Warn] sssh requires base64 or openssl for clipboard support"
+  echo "[Warn] sssh requires base64 or openssl in your local for reverse eval and clipboard support" >&2
 fi
 
-if [ "${copy_cmd}" != '' -a "${base64_d_cmd}" != '' ]; then
-  clipboard_fifo="${remote_tmp_dir}/clipboard_fifo"
-  clipboard_pid_file="${tmp_dir}/clipboard_pid"
+if ${enable_eval_and_clipboard} && \
+  [ "${l_copy_cmd}" != '' -a "${l_paste_cmd}" != '' -a "${l_base64_d_cmd}" != '' ]; then
+  # remote copy support
+  r_copy_fifo="${r_tmp_dir}/copy_fifo"
+  l_copy_pid_file="${l_tmp_dir}/copy_pid"
   sh -c "{ ${ssh_cmd} ${ssh_remote} -p ${ssh_port} \
-    \"mkfifo -m 600 ${clipboard_fifo} && tail -f ${clipboard_fifo}\" \
-    | while read chunk; do echo \${chunk} | ${base64_d_cmd} | ${copy_cmd}; done & } ; jobs -p" > ${clipboard_pid_file}
-  clipboard_pid="$(cat ${clipboard_pid_file})"
-  add_trap "kill ${clipboard_pid}"
+    \"mkfifo -m 600 ${r_copy_fifo} && tail -f ${r_copy_fifo}\" \
+    | while read chunk; do \
+      echo \${chunk} | ${l_base64_d_cmd} | ${l_copy_cmd}; \
+      done & } ; jobs -p" > ${l_copy_pid_file}
+  copy_pid="$(cat ${l_copy_pid_file})"
+  add_trap "kill ${copy_pid}"
 
-  # ssh w/ clipboard support
-  remote_copy_cmd="${remote_tmp_dir}/${remote_copy_cmd_name}"
+  # reverse eval support
+  r_eval_fifo="${r_tmp_dir}/eval_fifo"
+  l_eval_pid_file="${l_tmp_dir}/eval_pid"
+  sh -c "{ ${ssh_cmd} ${ssh_remote} -p ${ssh_port} \
+    \"mkfifo -m 600 ${r_eval_fifo} && tail -f ${r_eval_fifo}\" \
+    | while read chunk; do
+      eval \$(echo \${chunk#*:} | ${l_base64_d_cmd}) 2>&1 | base64 \
+      | ${ssh_cmd} ${ssh_remote} -p ${ssh_port} \
+        \"cat - > ${r_tmp_dir}/\${chunk%%:*}_fifo\";
+      done & } ; jobs -p" > ${l_eval_pid_file}
+  eval_pid="$(cat ${l_eval_pid_file})"
+  add_trap "kill ${eval_pid}"
+
+  # ssh w/ reverse eval and remote clipboard support
+  r_eval_cmd="${r_tmp_dir}/${r_eval_cmd_name}"
+  r_copy_cmd="${r_tmp_dir}/${r_copy_cmd_name}"
+  r_paste_cmd="${r_tmp_dir}/${r_paste_cmd_name}"
   "${ssh_cmd}" "${ssh_remote}" -t ${ssh_opts} " \
-    export PATH=\${PATH}:${remote_tmp_dir} && \
-    echo \"cat - | base64 > ${clipboard_fifo}\" > ${remote_copy_cmd} && \
-    chmod +x ${remote_copy_cmd} && \
-    \$(cat /etc/passwd | grep \$(whoami) | grep -oP '[^:]+$')"
+export PATH=\${PATH}:${r_tmp_dir}
+
+cat << EOS > ${r_eval_cmd}
+#!/bin/bash
+result_fifo=\"${r_tmp_dir}/\\\$\\\$_fifo\"
+mkfifo -m 600 \\\${result_fifo}
+trap \"rm -f \\\${result_fifo}\" 0 1 2 3 15
+echo \\\$\\\$:\\\$(cat - | base64) > ${r_eval_fifo}
+cat \\\${result_fifo} | base64 -d
+EOS
+
+cat << EOS > ${r_copy_cmd}
+#!/bin/bash
+cat - | base64 > ${r_copy_fifo}
+EOS
+
+cat << EOS > ${r_paste_cmd}
+#!/bin/bash
+echo '${l_paste_cmd}' | ${r_eval_cmd}
+EOS
+
+chmod +x ${r_eval_cmd} ${r_copy_cmd} ${r_paste_cmd}
+\$(cat /etc/passwd | grep \$(whoami) | grep -oP '[^:]+$')"
 else
-  # ssh w/o clipboard support
+  # ssh w/o reverse eval and remote clipboard support
+  echo "[Warn] sssh is running w/o reverse eval and remote clipboard support" >&2
   "${ssh_cmd}" "${ssh_remote}" ${ssh_opts}
 fi
