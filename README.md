@@ -40,7 +40,7 @@ sssh [<ssh_opts_if_need_be>] --volume <local_dir>:<remote_dir> <remote_host>
 You can copy text from a remote shell into a local clipboard.
 
 #### Usage
-No need extra care,
+Without extra care,
 ```console
 $ sssh [<ssh_opts_if_need_be>] <remote_host>
 ```
@@ -80,7 +80,7 @@ from local to remote
 You can run commands in your *local* shell from remote shell.
 
 #### Usage
-No need extra care,
+Without extra care,
 ```console
 $ sssh [<ssh_opts_if_need_be>] <remote_host>
 ```
