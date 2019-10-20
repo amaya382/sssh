@@ -95,21 +95,23 @@ $ echo 'hostname' | reval
 
 
 ## :wrench: Options
-* `--ssh_cmd`: string (`ssh`)
+* `--ssh_cmd / SSSH_SSH_CMD`: string (`ssh`)
     * ssh command (run in local)
-* `--sftp_cmd`: string (`/usr/lib/openssh/sftp-server`)
+    * e.g., Work w/ `autossh`: `SSSH_SSH_CMD=autossh sssh user@host`
+* `--sftp_cmd / SSSH_SFTP_CMD`: string (`/usr/lib/openssh/sftp-server`)
     * sftp command (run in local)
-* `--sshfs_cmd`: string (`sshfs`)
+* `--sshfs_cmd / SSSH_SSHFS_CMD`: string (`sshfs`)
     * sshfs command (run in remote)
-* `--use_remote_uid`: boolean (`true`)
+* `--use_remote_uid / SSSH_USE_REMOTE_UID`: boolean (`true`)
     * Use remote uid for mounting
-* `--use_allow_other`: boolean (`true`)
+* `--use_allow_other / SSSH_USE_ALLOW_OTHER`: boolean (`true`)
     * Use `allow_other` for mounting
-* `--enable_eval_and_clipboard`: boolean (`true`)
+* `--enable_eval_and_clipboard / SSSH_ENABLE_EVAL_AND_CLIPBOARD`: boolean (`true`)
     * Enable reverse eval and remote clipboard
-* `--remote_copy_cmd_name`: string (`rcopy`)
+* `--remote_copy_cmd_name / SSSH_REMOTE_COPY_CMD_NAME`: string (`rcopy`)
     * Name of command for copying in the remote shell
-* `--remote_paste_cmd_name`: string (`rpaste`)
+* `--remote_paste_cmd_name / SSSH_REMOTE_PASTE_CMD_NAME`: string (`rpaste`)
     * Name of command for pasting in the remote shell
-* `--reverse_eval_cmd_name`: string (`reval`)
+* `--reverse_eval_cmd_name / SSSH_REVERSE_EVAL_CMD_NAME`: string (`reval`)
     * Name of command for evaluating commands in the local shell
+

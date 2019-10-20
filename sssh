@@ -1,18 +1,19 @@
 #!/bin/bash
 
 # opts
-ssh_cmd=ssh
-sftp_cmd=/usr/lib/openssh/sftp-server
-sshfs_cmd=sshfs
-use_remote_uid=true
-use_allow_other=true
+ssh_cmd="${SSSH_SSH_CMD:-ssh}"
+sftp_cmd="${SSSH_SFTP_CMD:-/usr/lib/openssh/sftp-server}"
+sshfs_cmd="${SSSH_SSHFS_CMD:-sshfs}"
+use_remote_uid="${SSSH_USE_REMOTE_UID:-true}"
+use_allow_other="${SSSH_USE_ALLOW_OTHER:-true}"
+enable_eval_and_clipboard="${SSSH_ENABLE_EVAL_AND_CLIPBOARD:-true}"
+r_eval_cmd_name="${SSSH_REVERSE_EVAL_CMD_NAME:-reval}"
+r_copy_cmd_name="${SSSH_REMOTE_COPY_CMD_NAME:-rcopy}"
+r_paste_cmd_name="${SSSH_REMOTE_PASTE_CMD_NAME:-rpaste}"
 ssh_port=22
 l_mount_dir=''
 r_mount_dir=''
-enable_eval_and_clipboard=true
-r_copy_cmd_name=rcopy
-r_paste_cmd_name=rpaste
-r_eval_cmd_name=reval
+w_tty=false
 cmds_work_w_tty=()
 while [[ -n "$1" ]]; do
   case "$1" in
@@ -57,7 +58,7 @@ while [[ -n "$1" ]]; do
       # e.g,
       # sssh -t user@host zsh
       #      ^^   expects ^^^
-      tty=true
+      w_tty=true
       ;;
     -* )
       ssh_opts="${ssh_opts} $1" ;;
@@ -89,35 +90,35 @@ trap "_trap" 0 1 2 3 15
 l_tmp_dir="$(mktemp -d)"
 add_trap "rm -rf ${l_tmp_dir}"
 
-r_tmp_dir="$(${ssh_cmd} ${ssh_remote} -p ${ssh_port} mktemp -d)"
-add_trap "${ssh_cmd} ${ssh_remote} -p ${ssh_port} rm -rf ${r_tmp_dir}"
+r_tmp_dir="$(${ssh_cmd} ${ssh_remote} -p ${ssh_port} 'mktemp -d')"
+add_trap "${ssh_cmd} ${ssh_remote} -p ${ssh_port} \"rm -rf ${r_tmp_dir}\""
 
 
 # --volume
 if [ "${l_mount_dir}" != '' -a "${r_mount_dir}" != '' ]; then
-  if [ "$(${ssh_cmd} ${ssh_remote} -p ${ssh_port} [ -e ${r_mount_dir} ] && echo o || echo x)" = "x" ]; then
-    ${ssh_cmd} ${ssh_remote} -p ${ssh_port} mkdir -p "${r_mount_dir}"
+  if [ "$(${ssh_cmd} ${ssh_remote} -p ${ssh_port} \"[ -e ${r_mount_dir} ] && echo o || echo x\")" = 'x' ]; then
+    ${ssh_cmd} ${ssh_remote} -p ${ssh_port} "mkdir -p ${r_mount_dir}"
     echo "Created ${r_mount_dir} on ${ssh_remote}"
   else
-    if [ -n "$(${ssh_cmd} ${ssh_remote} -p ${ssh_port} ls ${r_mount_dir})" ]; then
+    if [ -n "$(${ssh_cmd} ${ssh_remote} -p ${ssh_port} \"ls ${r_mount_dir}\")" ]; then
       echo "${ssh_remote}:${r_mount_dir} already exists and is not empty."
       exit 1
     fi
   fi
 
   if "${use_remote_uid}" ; then
-    uid="$(${ssh_cmd} ${ssh_remote} -p ${ssh_port} id -u \$\(whoami\))"
+    uid="$(${ssh_cmd} ${ssh_remote} -p ${ssh_port} \"id -u \$\(whoami\)\")"
   fi
 
   l_sshfs_fifo="${l_tmp_dir}/sshfs_fifo"
   mkfifo -m 600 "${l_sshfs_fifo}"
   "${sftp_cmd}" < "${l_sshfs_fifo}" \
   | "${ssh_cmd}" "${ssh_remote}" -p "${ssh_port}" \
-    "${sshfs_cmd}" -C -o slave $("${use_allow_other}" && echo "-o allow_other") ${uid/#/-o uid=} -o cache=no -o transform_symlinks -o follow_symlinks \
-      ":${l_mount_dir}" "${r_mount_dir}" \
+    "\"${sshfs_cmd}\" -C -o slave $(\"${use_allow_other}\" && echo \"-o allow_other\") ${uid/#/-o uid=} -o cache=no -o transform_symlinks -o follow_symlinks \
+      \":${l_mount_dir}\" \"${r_mount_dir}\"" \
   > "${l_sshfs_fifo}" &
   sshfs_proc="$!"
-  add_trap "kill ${sshfs_proc} && wait ${sshfs_proc} && ${ssh_cmd} ${ssh_remote} -p ${ssh_port} fusermount -u ${r_mount_dir} > /dev/null 2>&1"
+  add_trap "kill ${sshfs_proc} && wait ${sshfs_proc} && ${ssh_cmd} ${ssh_remote} -p ${ssh_port} \"fusermount -u ${r_mount_dir} > /dev/null 2>&1\""
 fi
 
 
@@ -203,16 +204,17 @@ EOS
 
 chmod +x ${r_eval_cmd} ${r_copy_cmd} ${r_paste_cmd}"
 
-  if "${tty}"; then
+  if "${w_tty}"; then
     tty_cmd="${cmds_work_w_tty[@]}"
   else
-    tty_cmd="\$\(cat /etc/passwd \| grep \$\(whoami\) \| grep -oP \"[^:]+$\"\))"
+    tty_cmd="\$(cat /etc/passwd | grep \$(whoami) | grep -oP \"[^:]+$\")"
   fi
-  "${ssh_cmd}" "${ssh_remote}" -t ${ssh_opts} "${pre_cmd}${tty_cmd}"
+  "${ssh_cmd}" "${ssh_remote}" -t ${ssh_opts} "${pre_cmd}
+  ${tty_cmd}"
 else
   # ssh w/o reverse eval and remote clipboard support
   echo "[Warn] sssh is running w/o reverse eval and remote clipboard support" >&2
-  if ${tty}; then
+  if ${w_tty}; then
     "${ssh_cmd}" "${ssh_remote}" -t ${ssh_opts} "${cmds_work_w_tty[@]}"
   else
     "${ssh_cmd}" "${ssh_remote}" ${ssh_opts}
