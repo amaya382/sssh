@@ -22,6 +22,7 @@ Keeping all the original ssh's features, you can use additional functions:
 
 ### Remote
 * `sshfs`
+* `user_allow_other` in `/etc/fuse.conf`
 
 
 
