@@ -18,7 +18,7 @@ Keeping all the original ssh's features, you can use additional functions:
 ### Local
 * `ssh` (or commands which have the same I/F as `ssh`)
 * `openssh-sftp-server` (or other sftp servers compatible w/ `sshfs`)
-* `xsel` or `pbcopy` or `xclip`
+* `xsel` or `xclip` or `pbcopy/pbpaste`
 
 ### Remote
 * `sshfs`
