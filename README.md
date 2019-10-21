@@ -12,6 +12,8 @@ Keeping all the original ssh's features, you can use additional functions:
 
 **No additional daemon or alternative command is needed! Just use `sssh` instead of `ssh`**
 
+**Work w/ ssh-related tools like [amaya382/anyrc](https://github.com/amaya382/anyrc), [Russell91/sshrc](https://github.com/Russell91/sshrc), and autossh**
+
 
 
 ## :paperclip: Prerequisites
@@ -97,11 +99,14 @@ $ echo 'hostname' | reval
 ## :wrench: Options
 * `--ssh_cmd / SSSH_SSH_CMD`: string (`ssh`)
     * ssh command (run in local)
-    * e.g., Work w/ `autossh`: `SSSH_SSH_CMD=autossh sssh user@host`
+    * e.g., Work w/ `autossh`: `SSSH_SSH_CMD='autossh -M 0' sssh user@host`
 * `--sftp_cmd / SSSH_SFTP_CMD`: string (`/usr/lib/openssh/sftp-server`)
     * sftp command (run in local)
 * `--sshfs_cmd / SSSH_SSHFS_CMD`: string (`sshfs`)
     * sshfs command (run in remote)
+* `--sshfs_ssh_cmd / SSSH_SSHFS_SSH_CMD`: string (`ssh`)
+    * `-o ssh_command` in sshfs (run in remote)
+    * e.g., Work w/ `autossh`: `SSSH_SSHFS_SSH_CMD='autossh -M 0' sssh user@host`
 * `--use_remote_uid / SSSH_USE_REMOTE_UID`: boolean (`true`)
     * Use remote uid for mounting
 * `--use_allow_other / SSSH_USE_ALLOW_OTHER`: boolean (`true`)

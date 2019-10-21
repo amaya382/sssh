@@ -4,6 +4,7 @@
 ssh_cmd="${SSSH_SSH_CMD:-ssh}"
 sftp_cmd="${SSSH_SFTP_CMD:-/usr/lib/openssh/sftp-server}"
 sshfs_cmd="${SSSH_SSHFS_CMD:-sshfs}"
+sshfs_ssh_cmd="${SSSH_SSHFS_SSH_CMD:-ssh}"
 use_remote_uid="${SSSH_USE_REMOTE_UID:-true}"
 use_allow_other="${SSSH_USE_ALLOW_OTHER:-true}"
 enable_eval_and_clipboard="${SSSH_ENABLE_EVAL_AND_CLIPBOARD:-true}"
@@ -25,6 +26,9 @@ while [[ -n "$1" ]]; do
       shift ;;
     --sshfs_cmd )
       sshfs_cmd="$2"
+      shift ;;
+    --sshfs_ssh_cmd )
+      sshfs_ssh_cmd="$2"
       shift ;;
     --use_remote_uid )
       use_remote_uid="$2"
@@ -113,8 +117,15 @@ if [ "${l_mount_dir}" != '' -a "${r_mount_dir}" != '' ]; then
   l_sshfs_fifo="${l_tmp_dir}/sshfs_fifo"
   mkfifo -m 600 "${l_sshfs_fifo}"
   "${sftp_cmd}" < "${l_sshfs_fifo}" \
-  | "${ssh_cmd}" "${ssh_remote}" -p "${ssh_port}" \
-    "\"${sshfs_cmd}\" -C -o slave $("${use_allow_other}" && echo '-o allow_other') ${uid/#/-o uid=} -o cache=no -o transform_symlinks -o follow_symlinks \
+  | ${ssh_cmd} "${ssh_remote}" -p "${ssh_port}" \
+    "\"${sshfs_cmd}\" -C \
+      -o slave \
+      $("${use_allow_other}" && echo '-o allow_other') \
+      -o ssh_command=\"\$(which ${sshfs_ssh_cmd%% *} &> /dev/null && echo '${sshfs_ssh_cmd}' || echo 'ssh')\" \
+      \$(\"${use_remote_uid}\" && echo \"-o uid=\$(id -u \$(whoami))\") \
+      -o cache=no \
+      -o transform_symlinks \
+      -o follow_symlinks \
       \":${l_mount_dir}\" \"${r_mount_dir}\"" \
   > "${l_sshfs_fifo}" &
   sshfs_proc="$!"
@@ -209,14 +220,14 @@ chmod +x ${r_eval_cmd} ${r_copy_cmd} ${r_paste_cmd}"
   else
     tty_cmd="\$(cat /etc/passwd | grep \$(whoami) | grep -oP \"[^:]+$\")"
   fi
-  "${ssh_cmd}" "${ssh_remote}" -t ${ssh_opts} "${pre_cmd}
+  ${ssh_cmd} "${ssh_remote}" -t ${ssh_opts} "${pre_cmd}
   ${tty_cmd}"
 else
   # ssh w/o reverse eval and remote clipboard support
   echo "[Warn] sssh is running w/o reverse eval and remote clipboard support" >&2
   if "${w_tty}"; then
-    "${ssh_cmd}" "${ssh_remote}" -t ${ssh_opts} "${cmds_work_w_tty[@]}"
+    ${ssh_cmd} "${ssh_remote}" -t ${ssh_opts} "${cmds_work_w_tty[@]}"
   else
-    "${ssh_cmd}" "${ssh_remote}" ${ssh_opts}
+    ${ssh_cmd} "${ssh_remote}" ${ssh_opts}
   fi
 fi
