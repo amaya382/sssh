@@ -10,7 +10,7 @@ Keeping all the original ssh's features, you can use additional functions:
     * Paste text from your local clipboard into your remote shell
 * :leftwards_arrow_with_hook: "Run commands in your local shell" from your remote shell
 
-**No additional daemon or alternative command is needed! Just use `sssh` instead of `ssh`**
+**No additional daemon or alternative command is needed! Just use `sssh` instead of `ssh` w/o X11Forwarding**
 
 **Work w/ ssh-related tools like [amaya382/anyrc](https://github.com/amaya382/anyrc), [Russell91/sshrc](https://github.com/Russell91/sshrc), and autossh**
 
