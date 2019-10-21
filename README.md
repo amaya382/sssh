@@ -107,10 +107,12 @@ $ echo 'hostname' | reval
 * `--sshfs_ssh_cmd / SSSH_SSHFS_SSH_CMD`: string (`ssh`)
     * `-o ssh_command` in sshfs (run in remote)
     * e.g., Work w/ `autossh`: `SSSH_SSHFS_SSH_CMD='autossh -M 0' sssh user@host`
-* `--use_remote_uid / SSSH_USE_REMOTE_UID`: boolean (`true`)
+* `--sshfs_use_remote_uid / SSSH_SSHFS_USE_REMOTE_UID`: boolean (`true`)
     * Use remote uid for mounting
-* `--use_allow_other / SSSH_USE_ALLOW_OTHER`: boolean (`true`)
+* `--sshfs_use_allow_other / SSSH_SSHFS_USE_ALLOW_OTHER`: boolean (`true`)
     * Use `allow_other` for mounting
+* `--sshfs_use_cache / SSSH_SSHFS_USE_CACHE`: boolean (`false`)
+    * Use cache in sshfs
 * `--enable_eval_and_clipboard / SSSH_ENABLE_EVAL_AND_CLIPBOARD`: boolean (`true`)
     * Enable reverse eval and remote clipboard
 * `--remote_copy_cmd_name / SSSH_REMOTE_COPY_CMD_NAME`: string (`rcopy`)

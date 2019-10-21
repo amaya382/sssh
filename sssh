@@ -5,8 +5,9 @@ ssh_cmd="${SSSH_SSH_CMD:-ssh}"
 sftp_cmd="${SSSH_SFTP_CMD:-/usr/lib/openssh/sftp-server}"
 sshfs_cmd="${SSSH_SSHFS_CMD:-sshfs}"
 sshfs_ssh_cmd="${SSSH_SSHFS_SSH_CMD:-ssh}"
-use_remote_uid="${SSSH_USE_REMOTE_UID:-true}"
-use_allow_other="${SSSH_USE_ALLOW_OTHER:-true}"
+sshfs_use_remote_uid="${SSSH_SSHFS_USE_REMOTE_UID:-true}"
+sshfs_use_allow_other="${SSSH_SSHFS_USE_ALLOW_OTHER:-true}"
+sshfs_use_cache="${SSSH_SSHFS_USE_CACHE:-false}"
 enable_eval_and_clipboard="${SSSH_ENABLE_EVAL_AND_CLIPBOARD:-true}"
 r_eval_cmd_name="${SSSH_REVERSE_EVAL_CMD_NAME:-reval}"
 r_copy_cmd_name="${SSSH_REMOTE_COPY_CMD_NAME:-rcopy}"
@@ -30,11 +31,14 @@ while [[ -n "$1" ]]; do
     --sshfs_ssh_cmd )
       sshfs_ssh_cmd="$2"
       shift ;;
-    --use_remote_uid )
-      use_remote_uid="$2"
+    --sshfs_use_remote_uid )
+      sshfs_use_remote_uid="$2"
       shift ;;
-    --use_allow_other )
-      use_allow_other="$2"
+    --sshfs_use_allow_other )
+      sshfs_use_allow_other="$2"
+      shift ;;
+    --sshfs_use_cache )
+      sshfs_use_cache="$2"
       shift ;;
     --enable_eval_and_clipboard )
       enable_eval_and_clipboard="$2"
@@ -110,7 +114,7 @@ if [ "${l_mount_dir}" != '' -a "${r_mount_dir}" != '' ]; then
     fi
   fi
 
-  if "${use_remote_uid}" ; then
+  if "${sshfs_use_remote_uid}" ; then
     uid="$(${ssh_cmd} ${ssh_remote} -p ${ssh_port} 'id -u $(whoami)')"
   fi
 
@@ -120,10 +124,10 @@ if [ "${l_mount_dir}" != '' -a "${r_mount_dir}" != '' ]; then
   | ${ssh_cmd} "${ssh_remote}" -p "${ssh_port}" \
     "\"${sshfs_cmd}\" -C \
       -o slave \
-      $("${use_allow_other}" && echo '-o allow_other') \
+      $("${sshfs_use_allow_other}" && echo '-o allow_other') \
       -o ssh_command=\"\$(which ${sshfs_ssh_cmd%% *} &> /dev/null && echo '${sshfs_ssh_cmd}' || echo 'ssh')\" \
-      \$(\"${use_remote_uid}\" && echo \"-o uid=\$(id -u \$(whoami))\") \
-      -o cache=no \
+      \$(\"${sshfs_use_remote_uid}\" && echo \"-o uid=\$(id -u \$(whoami))\") \
+      -o cache=$("${sshfs_use_cache}" && echo 'yes' || echo 'no') \
       -o transform_symlinks \
       -o follow_symlinks \
       \":${l_mount_dir}\" \"${r_mount_dir}\"" \
