@@ -170,7 +170,7 @@ if ${enable_eval_and_clipboard} && \
   # remote copy support
   r_copy_fifo="${r_tmp_dir}/copy_fifo"
   l_copy_pid_file="${l_tmp_dir}/copy_pid"
-  sh -c "{ ${ssh_cmd} ${ssh_remote} -p ${ssh_port} \
+  sh -c "{ ${ssh_cmd} -t -t ${ssh_remote} -p ${ssh_port} \
     \"mkfifo -m 600 ${r_copy_fifo} && tail -f ${r_copy_fifo}\" \
     | while read chunk; do \
       echo \${chunk} | ${l_base64_d_cmd} | ${l_copy_cmd}; \
@@ -181,7 +181,7 @@ if ${enable_eval_and_clipboard} && \
   # reverse eval support
   r_eval_fifo="${r_tmp_dir}/eval_fifo"
   l_eval_pid_file="${l_tmp_dir}/eval_pid"
-  sh -c "{ ${ssh_cmd} ${ssh_remote} -p ${ssh_port} \
+  sh -c "{ ${ssh_cmd} -t -t ${ssh_remote} -p ${ssh_port} \
     \"mkfifo -m 600 ${r_eval_fifo} && tail -f ${r_eval_fifo}\" \
     | while read chunk; do
       eval \$(echo \${chunk#*:} | ${l_base64_d_cmd}) 2>&1 | base64 \
