@@ -114,10 +114,6 @@ if [ "${l_mount_dir}" != '' -a "${r_mount_dir}" != '' ]; then
     fi
   fi
 
-  if "${sshfs_use_remote_uid}" ; then
-    uid="$(${ssh_cmd} ${ssh_remote} -p ${ssh_port} 'id -u $(whoami)')"
-  fi
-
   l_sshfs_fifo="${l_tmp_dir}/sshfs_fifo"
   mkfifo -m 600 "${l_sshfs_fifo}"
   "${sftp_cmd}" < "${l_sshfs_fifo}" \
