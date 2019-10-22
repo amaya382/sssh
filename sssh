@@ -192,7 +192,7 @@ if ${enable_eval_and_clipboard} && \
   r_copy_cmd="${r_tmp_dir}/${r_copy_cmd_name}"
   r_paste_cmd="${r_tmp_dir}/${r_paste_cmd_name}"
   pre_cmd="\
-export PATH=\${PATH}:${r_tmp_dir}
+export PATH=${r_tmp_dir}:\${PATH}
 
 cat << EOS > ${r_eval_cmd}
 #!/bin/bash
